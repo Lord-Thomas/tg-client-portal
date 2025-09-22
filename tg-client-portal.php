@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TG Client Portal (Admin v1)
  * Description: Espace admin sécurisé pour gérer Devis & Factures liés à des clients.
- * Version: 0.1.0
+ * Version: 0.1.1
  * Author: Thomas
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -11,7 +11,7 @@
 if (!defined('ABSPATH')) exit;
 
 // Version/paths
-define('TGCP_VER', '0.1.0');
+define('TGCP_VER', '0.1.1');
 define('TGCP_FILE', __FILE__);
 
 // --- Capabilities helper
@@ -173,19 +173,43 @@ add_action('manage_facture_posts_custom_column', function($col,$id){
   if ($col==='tgcp_due'){ $d=get_post_meta($id,'_tgcp_due_at',true); echo $d?esc_html(date_i18n(get_option('date_format'), strtotime($d))):'—'; }
 },10,2);
 
-add_action('plugins_loaded', function(){
-    $puc = plugin_dir_path(__FILE__) . 'includes/vendor/plugin-update-checker/plugin-update-checker.php';
-    if (file_exists($puc)) {
-      require_once $puc;
-      $up = Puc_v5_Factory::buildUpdateChecker(
-        'https://github.com/Lord-Thomas/tg-client-portal/',
-        __FILE__,
-        'tg-client-portal'
-      );
-      $up->setBranch('main');
-      if (defined('TGCP_GITHUB_TOKEN') && TGCP_GITHUB_TOKEN) {
-        $up->setAuthentication(TGCP_GITHUB_TOKEN);
-      }
+// -- Auto-update via GitHub (Plugin Update Checker) --
+// On charge TARD et en vérifiant l'existence du fichier.
+add_action('plugins_loaded', function () {
+    // Adapte ce chemin si ton arbo n'est pas exactement celle-ci :
+    $puc_bootstrap = plugin_dir_path(__FILE__) . 'includes/vendor/plugin-update-checker/plugin-update-checker.php';
+  
+    // On ne tente RIEN si le fichier n'existe pas ou n'est pas lisible
+    if (!is_readable($puc_bootstrap)) {
+      // Debug facultatif :
+      // error_log('[TGCP] PUC introuvable: ' . $puc_bootstrap);
+      return;
+    }
+  
+    require_once $puc_bootstrap;
+  
+    // Certaines versions de la lib utilisent Puc_v5_Factory (actuel)
+    if (!class_exists('Puc_v5_Factory')) {
+      // Debug facultatif :
+      // error_log('[TGCP] Classe Puc_v5_Factory introuvable après require.');
+      return;
+    }
+  
+    // IMPORTANT : URL du repo GitHub SANS .git, terminaison par un /
+    $updater = Puc_v5_Factory::buildUpdateChecker(
+      'https://github.com/Lord-Thomas/tg-client-portal/',
+      __FILE__,
+      'tg-client-portal'
+    );
+  
+    // Suivre la branche main (tu pourras passer aux releases + tags plus tard)
+    if (method_exists($updater, 'setBranch')) {
+      $updater->setBranch('main');
+    }
+  
+    // Repo privé ? Définis TGCP_GITHUB_TOKEN dans wp-config.php
+    if (defined('TGCP_GITHUB_TOKEN') && TGCP_GITHUB_TOKEN && method_exists($updater, 'setAuthentication')) {
+      $updater->setAuthentication(TGCP_GITHUB_TOKEN);
     }
   });
   
