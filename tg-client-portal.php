@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TG Client Portal (Admin v1)
  * Description: Espace admin sécurisé pour gérer Devis & Factures liés à des clients.
- * Version: 0.1.2
+ * Version: 0.1.3
  * Author: Thomas
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -197,21 +197,19 @@ add_action('plugins_loaded', function () {
   });
 
   // Debug updates (temporaire)
-add_action('admin_init', function () {
+  add_action('admin_init', function () {
     if (!current_user_can('update_plugins')) return;
-  
-    // 1) Purger le cache des updates plugins
     delete_site_transient('update_plugins');
-  
-    // 2) Si le lien "Vérifier les mises à jour" n’apparaît pas sur la ligne du plugin,
-    // on force quand même un check PUC si l’instance existe.
     if (function_exists('puc_get_updater')) {
-      $updater = puc_get_updater('tg-client-portal'); // helper de PUC
-      if ($updater) {
-        if (method_exists($updater, 'setDebugMode')) $updater->setDebugMode(true);
-        $updater->checkForUpdates(); // lance la requête maintenant
-      }
+        $updater = puc_get_updater('tg-client-portal');
+        if ($updater) {
+            if (method_exists($updater, 'setDebugMode')) $updater->setDebugMode(true);
+            $update = $updater->checkForUpdates();
+            if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                error_log('[TGCP] PUC update object: ' . print_r($update, true));
+            }
+        }
     }
-  });
-  
+});
+
   
