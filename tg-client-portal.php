@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TG Client Portal (Admin v1)
  * Description: Espace admin sécurisé pour gérer Devis & Factures liés à des clients.
- * Version: 0.1.1
+ * Version: 0.1.2
  * Author: Thomas
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -11,7 +11,7 @@
 if (!defined('ABSPATH')) exit;
 
 // Version/paths
-define('TGCP_VER', '0.1.1');
+define('TGCP_VER', '0.1.2');
 define('TGCP_FILE', __FILE__);
 
 // --- Capabilities helper
@@ -176,40 +176,42 @@ add_action('manage_facture_posts_custom_column', function($col,$id){
 // -- Auto-update via GitHub (Plugin Update Checker) --
 // On charge TARD et en vérifiant l'existence du fichier.
 add_action('plugins_loaded', function () {
-    // Adapte ce chemin si ton arbo n'est pas exactement celle-ci :
     $puc_bootstrap = plugin_dir_path(__FILE__) . 'includes/vendor/plugin-update-checker/plugin-update-checker.php';
-  
-    // On ne tente RIEN si le fichier n'existe pas ou n'est pas lisible
-    if (!is_readable($puc_bootstrap)) {
-      // Debug facultatif :
-      // error_log('[TGCP] PUC introuvable: ' . $puc_bootstrap);
-      return;
-    }
-  
+    if (!is_readable($puc_bootstrap)) return;
     require_once $puc_bootstrap;
   
-    // Certaines versions de la lib utilisent Puc_v5_Factory (actuel)
-    if (!class_exists('Puc_v5_Factory')) {
-      // Debug facultatif :
-      // error_log('[TGCP] Classe Puc_v5_Factory introuvable après require.');
-      return;
-    }
+    if (!class_exists('Puc_v5_Factory')) return;
   
-    // IMPORTANT : URL du repo GitHub SANS .git, terminaison par un /
     $updater = Puc_v5_Factory::buildUpdateChecker(
       'https://github.com/Lord-Thomas/tg-client-portal/',
       __FILE__,
       'tg-client-portal'
     );
   
-    // Suivre la branche main (tu pourras passer aux releases + tags plus tard)
-    if (method_exists($updater, 'setBranch')) {
-      $updater->setBranch('main');
-    }
+    if (method_exists($updater, 'setBranch')) $updater->setBranch('main');
+    if (method_exists($updater, 'setDebugMode')) $updater->setDebugMode(true);
   
-    // Repo privé ? Définis TGCP_GITHUB_TOKEN dans wp-config.php
-    if (defined('TGCP_GITHUB_TOKEN') && TGCP_GITHUB_TOKEN && method_exists($updater, 'setAuthentication')) {
+    if (defined('TGCP_GITHUB_TOKEN') && TGCP_GITHUB_TOKEN) {
       $updater->setAuthentication(TGCP_GITHUB_TOKEN);
     }
   });
+
+  // Debug updates (temporaire)
+add_action('admin_init', function () {
+    if (!current_user_can('update_plugins')) return;
+  
+    // 1) Purger le cache des updates plugins
+    delete_site_transient('update_plugins');
+  
+    // 2) Si le lien "Vérifier les mises à jour" n’apparaît pas sur la ligne du plugin,
+    // on force quand même un check PUC si l’instance existe.
+    if (function_exists('puc_get_updater')) {
+      $updater = puc_get_updater('tg-client-portal'); // helper de PUC
+      if ($updater) {
+        if (method_exists($updater, 'setDebugMode')) $updater->setDebugMode(true);
+        $updater->checkForUpdates(); // lance la requête maintenant
+      }
+    }
+  });
+  
   
