@@ -91,14 +91,17 @@ function tgcp_input_money($label,$name,$value){
 function tgcp_input_date($label,$name,$value){
   return '<p><label><strong>'.$label.'</strong><br><input type="date" name="'.$name.'" value="'.esc_attr($value).'"></label></p>';
 }
-function tgcp_input_select($label,$name,$current,array $options){
-  $h = '<p><label><strong>'.$label.'</strong><br><select name="'.$name.'" style="min-width:200px"><option value="">— Sélectionner —</option>';
-  foreach($options as $val=>$text){
-    $val = sanitize_key($val);
-    $h .= '<option value="'.$val.'" '.selected($current,$val,false).'>'.esc_html($text).'</option>';
+if (!function_exists('tgcp_input_select')) {
+  function tgcp_input_select($label,$name,$current,array $options){
+    $h = '<p><label><strong>'.$label.'</strong><br><select name="'.$name.'" style="min-width:200px"><option value="">— Sélectionner —</option>';
+    foreach($options as $val=>$text){
+      $val = sanitize_key($val);
+      $h .= '<option value="'.$val.'" '.selected($current,$val,false).'>'.esc_html($text).'</option>';
+    }
+    return $h.'</select></label></p>';
   }
-  return $h.'</select></label></p>';
 }
+
 
 function tgcp_render_devis_meta($post){
   wp_nonce_field('tgcp_save_meta','tgcp_nonce');
@@ -211,5 +214,80 @@ add_action('plugins_loaded', function () {
         }
     }
 });
+
+// ===== DIAGNOSTICS PUC (temporaire) =====
+add_action('admin_menu', function () {
+  add_submenu_page(
+    'tgcp',
+    'Diagnostics Mises à jour',
+    'Diagnostics',
+    'update_plugins',
+    'tgcp-diagnostics',
+    function () {
+      echo '<div class="wrap"><h1>Diagnostics PUC</h1>';
+
+      // 1) Infos locales
+      $plugin_file = __FILE__;
+      $plugin_data = get_file_data($plugin_file, [
+        'Version' => 'Version',
+        'Name'    => 'Plugin Name'
+      ], 'plugin');
+      echo '<h2>Version locale</h2><pre>';
+      echo esc_html($plugin_data['Name'] . ' — ' . $plugin_data['Version']);
+      echo "</pre>";
+
+      // 2) Test HTTP simple vers GitHub (vérifie que le serveur peut sortir)
+      $http_test = wp_remote_get('https://api.github.com/repos/Lord-Thomas/tg-client-portal/commits/main', [
+        'timeout' => 10,
+        'headers' => ['User-Agent' => 'WordPress; tg-client-portal'],
+      ]);
+      echo '<h2>Test HTTP → GitHub API</h2><pre>';
+      if (is_wp_error($http_test)) {
+        echo esc_html('ERREUR HTTP : ' . $http_test->get_error_message());
+      } else {
+        echo esc_html('HTTP ' . wp_remote_retrieve_response_code($http_test) . ' OK');
+      }
+      echo "</pre>";
+
+      // 3) Forcer PUC et afficher ce qu'il voit
+      // Chemin attendu de PUC :
+      $puc_bootstrap = plugin_dir_path(__FILE__) . 'includes/vendor/plugin-update-checker/plugin-update-checker.php';
+      echo '<h2>PUC</h2><pre>';
+      if (!is_readable($puc_bootstrap)) {
+        echo esc_html('PUC non trouvé : ' . $puc_bootstrap) . '</pre></div>';
+        return;
+      }
+      require_once $puc_bootstrap;
+      if (!class_exists('Puc_v5_Factory')) {
+        echo esc_html("Classe Puc_v5_Factory introuvable après require.") . '</pre></div>';
+        return;
+      }
+
+      $repoUrl = 'https://github.com/Lord-Thomas/tg-client-portal/';
+      $updater = Puc_v5_Factory::buildUpdateChecker($repoUrl, __FILE__, 'tg-client-portal');
+      if (method_exists($updater, 'setBranch')) $updater->setBranch('main');
+      if (method_exists($updater, 'setDebugMode')) $updater->setDebugMode(true);
+
+      // Purge cache WP
+      delete_site_transient('update_plugins');
+
+      // Récup info distante
+      $info  = $updater->requestInfo();      // métadonnées (version, download_url…)
+      $check = $updater->checkForUpdates();  // proposition d'update si version > locale
+
+      echo esc_html("Repo URL : $repoUrl") . "\n";
+      echo esc_html('PUC info.version : ' . (is_object($info) && isset($info->version) ? $info->version : 'N/A')) . "\n";
+      echo esc_html('PUC info.download_url : ' . (is_object($info) && isset($info->download_url) ? $info->download_url : 'N/A')) . "\n";
+      echo esc_html('PUC check.version : ' . (is_object($check) && isset($check->version) ? $check->version : 'N/A')) . "\n";
+      echo esc_html('Branche : main') . "\n";
+      echo "</pre>";
+
+      echo '<p>Astuce : si <em>PUC info.version</em> est bien supérieure à la version locale, la mise à jour doit apparaître dans “Tableau de bord → Mises à jour”.</p>';
+
+      echo '</div>';
+    }
+  );
+});
+
 
   
